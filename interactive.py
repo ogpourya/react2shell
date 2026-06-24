@@ -305,6 +305,9 @@ def exec_remote(command: str) -> tuple[Optional[str], Optional[str], int]:
     p = state.remote_path
     if p and p != "~" and p != os.path.expanduser("~"):
         command = f"cd {shlex.quote(p)}; {command}"
+    if command.rstrip().endswith("&"):
+        command = command.rstrip()
+        command = command[:-1].rstrip() + " >/dev/null 2>&1 &"
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
         output, error = send_raw(
