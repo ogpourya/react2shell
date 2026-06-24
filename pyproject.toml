@@ -14,4 +14,11 @@ dependencies = [
 react2shell = "scanner:main"
 react2shell-interactive = "interactive:main"
 
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["scanner", "interactive"]
+
 [tool.uv]
