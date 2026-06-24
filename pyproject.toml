@@ -1,0 +1,17 @@
+[project]
+name = "react2shell"
+version = "0.1.0"
+description = "React2Shell scanner & interactive PoC for CVE-2025-55182 / CVE-2025-66478"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28.0",
+    "tqdm>=4.64.0",
+    "urllib3>=1.26.0",
+    "prompt_toolkit>=3.0.0",
+]
+
+[project.scripts]
+react2shell = "scanner:main"
+react2shell-interactive = "interactive:main"
+
+[tool.uv]

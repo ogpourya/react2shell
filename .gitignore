@@ -1,1 +1,4 @@
 dev/
+__pycache__/
+.interactive_history
+.interactive_state

