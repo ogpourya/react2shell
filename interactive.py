@@ -18,6 +18,7 @@ import re
 import sys
 import os
 import json
+import shlex
 import time
 import base64
 from datetime import datetime
@@ -303,7 +304,7 @@ def send_raw(url: str, command: str, timeout: int, verify: bool) -> tuple[Option
 def exec_remote(command: str) -> tuple[Optional[str], Optional[str], int]:
     p = state.remote_path
     if p and p != "~" and p != os.path.expanduser("~"):
-        command = f"cd {p} && {command}"
+        command = f"cd {shlex.quote(p)}; {command}"
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
         output, error = send_raw(
@@ -389,8 +390,10 @@ def cmd_cd(path: str):
         print_status("[!]", Colors.YELLOW, "Set a target URL first: url <URL>")
         return
 
-    if not path or path == "~":
-        path = "~"
+    path = path.split()[0] if path.split() else "~"
+
+    if path == "~":
+        pass
     elif path.startswith("~/"):
         path = path[2:]
 
